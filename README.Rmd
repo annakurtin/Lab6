@@ -128,7 +128,7 @@ Note, the next two sets of commands give a way to export the processed rasters, 
 ```{r}
 names = c("deer_w", "moose_w", "elk_w", "sheep_w", "goat_w", "wolf_w","elevation2", "disthumanaccess2", "disthhu2", "landcover2", "alpine", "burn", "closedConif", "modConif", "herb", "mixed", "rockIce", "water", "decid")
 
-writeRaster(all_rasters,"Output/lab6Stack.tif",names = 'names')
+writeRaster(all_rasters,"Output/lab6Stack.tif",names = 'names', overwrite = TRUE)
 ```
 
 # Multiple Logistic Regression & Collinearity
