@@ -75,7 +75,7 @@ disthhu2<-rast("Data/DistFromHighHumanAccess2.tif") #resampled in lab 4
 landcover2 <- rast("Data/landcover16.tif") ## resampled to same extent as lab 4
 ext(landcover2)
 plot(landcover2)
-plot(kernelHR, add=TRUE)
+plot(kernelHR, add=TRUE, col = NA)
 ```
 
 ```{r}
@@ -434,7 +434,7 @@ _Negative Predictive Value_ : the proportion of negative cases that were correct
 _Sensitivity or Recall_ : the proportion of actual positive cases which are correctly identified.
 _Specificity_ : the proportion of actual negative cases which are correctly identified.
 
-![Figure 6.1. Calculations of different quantities from a Confusion Matrix. Note, Target represents the TRUTH, and Model represents the PREDICTIONS.  ](/Users/mark.hebblewhite/Box Sync/Teaching/UofMcourses/WILD562/Spring2021/Labs/lab6/Figures/ConfusionMatrix.png)
+![Figure 6.1. Calculations of different quantities from a Confusion Matrix. Note, Target represents the TRUTH, and Model represents the PREDICTIONS.  ](Figures/ConfusionMatrix.png)
 
 _Excercise: Redo for the top.env model_ on your own.
 
@@ -739,10 +739,10 @@ Note we need to use the names of the raster layers we brought in up above. Note 
 
 Lets bring in the wolfyht shapefile, and overlay the wolf home ranges and telemetry points to overlap to also aid our VISUAL model evaluation. 
 ```{r}
-wolfyht<-shapefile("Data/wolfyht.shp")
+wolfyht<-st_read("Data/wolfyht.shp")
 # plot predicted raster within extent of kernels raster
 plot(rast.top.biotic, col=colorRampPalette(c("yellow", "orange", "red"))(255), ext=kernels)
-plot(kernelHR, add=TRUE)
+plot(kernelHR, add=TRUE, col = NA)
 plot(wolfyht, col='blue', pch = 16, add=TRUE)
 ```
 We note a number of issues with this plot. First, there are no predictions outside of Banff National Park, the extent of the underlying Deer, elk, moose models.  This is a common problem in spatial modeling, mismatched extents limit spatial predictions. 
@@ -758,20 +758,20 @@ This confirms that most of the study area is rock and ice, high elevaiton, low p
 Lets zoom in to a specific area in the Bow Valley, and examine how the spatial predictions are performing. 
 ```{r}
 ##
-bv.raster<-raster()
-extent(bv.raster) <- c(xmin=570000, xmax=600000, ymin=5665000, ymax=5685000) 
+bv.raster<-rast()
+ext(bv.raster) <- c(xmin=570000, xmax=600000, ymin=5665000, ymax=5685000) 
 plot(rast.top.biotic, col=colorRampPalette(c("yellow", "orange", "red"))(255), ext=bv.raster)
-plot(kernelHR, add=TRUE)
+plot(kernelHR, add=TRUE, col = NA)
 plot(wolfyht, col='blue', pch = 16, add=TRUE)
 ```
 
 Lets zoom in to a specific area in the Red Deer Pack, and examine how the spatial predictions are performing. 
 ```{r}
 ##
-rd.raster<-raster()
-extent(rd.raster) <- c(xmin=540000, xmax=600000, ymin=5700000, ymax=5730000) 
+rd.raster<-rast()
+ext(rd.raster) <- c(xmin=540000, xmax=600000, ymin=5700000, ymax=5730000) 
 plot(rast.top.biotic, col=colorRampPalette(c("yellow", "orange", "red"))(255), ext=rd.raster)
-plot(kernelHR, add=TRUE)
+plot(kernelHR, add=TRUE, col = NA)
 plot(wolfyht, col='blue', pch = 16, add=TRUE)
 ```
 OVerall, our spatial model predictions seem to be matching the wolf used distributions very well! Bravo - we have just fit our first RSF model! 
