@@ -75,7 +75,7 @@ disthhu2<-rast("Data/DistFromHighHumanAccess2.tif") #resampled in lab 4
 landcover2 <- rast("Data/landcover16.tif") ## resampled to same extent as lab 4
 ext(landcover2)
 plot(landcover2)
-plot(kernelHR, add=TRUE, col = NA)
+plot(kernelHR, add=TRUE, col = NA) #note - col = NA maps just the polygon border
 ```
 
 ```{r}
@@ -94,7 +94,7 @@ landcover2 <- resample(landcover2, elk_w)
 
 ```
 
-Then we create and set values for landcover rasters based on landcover2 values of Habitat classification variables
+Then we create and set values for landcover rasters based on landcover2 values of Habitat classification variables. Note below that we are using the command `ifel()` which is the `terra` equivalent of `ifelse()`.
 
 
 ```{r}

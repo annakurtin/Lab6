@@ -115,7 +115,7 @@ plot(landcover2)
     ## Warning: [plot] unknown categories in raster values
 
 ``` r
-plot(kernelHR, add=TRUE, col = NA)
+plot(kernelHR, add=TRUE, col = NA) #note - col = NA maps just the polygon border
 ```
 
     ## Warning in plot.sf(kernelHR, add = TRUE, col = NA): ignoring all but the first
@@ -163,7 +163,8 @@ landcover2 <- resample(landcover2, elk_w)
 ```
 
 Then we create and set values for landcover rasters based on landcover2
-values of Habitat classification variables
+values of Habitat classification variables. Note below that we are using
+the command `ifel()` which is the `terra` equivalent of `ifelse()`.
 
 ``` r
 alpine <- ifel(landcover2 == 15 | landcover2 == 16, 1,ifel(is.na(landcover2),NA,0))
@@ -1441,12 +1442,12 @@ kfolds
 ```
 
     ##                r.rho            p
-    ## 1          0.9535451 1.926125e-05
-    ## 2          0.8705196 1.048737e-03
-    ## 3          0.8952738 4.629661e-04
-    ## 4          0.8014896 5.305472e-03
-    ## 5          0.9567173 1.457134e-05
-    ## (meanfreq) 0.9665698 5.248116e-06
+    ## 1          0.9660918 5.551570e-06
+    ## 2          0.9692234 3.782090e-06
+    ## 3          0.8845386 6.749108e-04
+    ## 4          0.9251873 1.251260e-04
+    ## 5          0.9284518 1.050963e-04
+    ## (meanfreq) 0.9695302 3.634851e-06
 
 First, we got some error messages about tie values. Lets overlook that
 for now, but refer to Boyce et al or the kvx.pdf vignette for more
@@ -1486,9 +1487,9 @@ kfolds2
 ```
 
     ##                 r.rho           p
-    ## Bow Valley  0.7683070 0.009429433
-    ## Red Deer   -0.2313630 0.520125728
-    ## (meanfreq)  0.8545455 0.003504744
+    ## Bow Valley 0.73556571 0.015323456
+    ## Red Deer   0.06707442 0.853933045
+    ## (meanfreq) 0.80606061 0.008235571
 
 So the answer is that the overall pooled model predicts the Bow Valley
 pack really well, but fails to predict the Red Deer pack any better,
@@ -1551,8 +1552,8 @@ rand.vec.1.table
 
     ##      bin
     ## used1   1   2   3   4   5   6   7   8   9  10
-    ##     0 172 172 172 163 162 158 139 127  72  70
-    ##     1   0   0   1   8  10  14  34  44 100 102
+    ##     0 157 169 166 165 159 154 137 119  79  61
+    ##     1  12   0   3   4   9  15  32  50  90 107
 
 This basically shows the data in each bin for used and available
 locations. If the model is any ‘good’, then high ranking habitat bins
