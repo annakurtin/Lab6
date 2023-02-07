@@ -798,3 +798,6 @@ c.	Conduct model evaluation using the R-squared from a linear regression of the 
 
 d.	Can you think of how to do k-folds cross validation between packs? i.e., compare the area adjusted frequency of counts in each of 10 ranked deciles to that predicted for the other pack??? What does the k-folds cross validation tell us about differences between predictions at the population level and predictions at the pack-level??? Follow the lab instructions for manually calculating k-folds above using the excel spreadsheets AT the very least. OR - do in R using the 'manual' code we used at the end of lab. How do these cross-validation between packs compare to the 'naive' k-folds we conducted partitioning by wolf pack in lab (e.g., by setting partition = "pack").
 
+```{r eval=FALSE, include=FALSE}
+knitr::purl(input = "README.Rmd", output = "lab6.R", documentation = 1)
+```
