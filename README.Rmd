@@ -21,6 +21,23 @@ options(repos = r)
 
 Today we are going to use many of the previous packages we have come to rely on for spatial mapping, managing data, model selection and graphing.  As well as the new pacakges DescTools and a few other new ones. 
 `packages <- c("ROCR", "tidyverse", "ks", "mapview", "colorRamps","rgeos", "VGAM", "AICcmodavg", "MuMIn", "corrgram", "GGally","caret", "DescTools", "car", "sf", "terra", "stars", "tmap")`
+
+```{r}
+## First specify the packages of interest
+packages <- c("ROCR", "tidyverse", "ks", "mapview", "colorRamps","rgeos", "VGAM", "AICcmodavg", "MuMIn", "corrgram", "GGally","caret", "DescTools", "car", "sf", "terra", "stars", "tmap")
+
+## Now check each packages, if it needs to be installed, install it, then load it
+package.check <- lapply(
+  packages,
+  FUN = function(x) {
+    if (!require(x, character.only = TRUE)) {
+      install.packages(x, dependencies = TRUE)
+      library(x, character.only = TRUE)
+    }
+  }
+)
+```
+
 ```{r load packages, include=FALSE}
 
 #function to install and load required packages
@@ -52,7 +69,7 @@ tmap_mode("plot")
 tm_shape(kernelHR) + tm_polygons()
 
 plot(kernelHR)
-
+# create a mask raster called kernel - this isn't used later
 ext(kernelHR)
 kernels <- rast()
 ext(kernels) <- c(xmin=546836, xmax=612093, ymin=5662036, ymax=5748911) 
@@ -99,7 +116,8 @@ Then we create and set values for landcover rasters based on landcover2 values o
 
 ```{r}
 
-
+# group the categories into bigger categories and reclassify
+# This will give you a spatial covariate for a dummy variable that you can plug into a logistic regression model 
 alpine <- ifel(landcover2 == 15 | landcover2 == 16, 1,ifel(is.na(landcover2),NA,0))
 burn <- ifel(landcover2 == 12 | landcover2 == 13 |landcover2 == 14, 1, ifel(is.na(landcover2),NA,0))
 closedConif <- ifel(landcover2 == 3, 1, ifel(is.na(landcover2),NA,0))
@@ -112,7 +130,7 @@ decid <- ifel(landcover2 == 10, 1, ifel(is.na(landcover2),NA,0))
 plot(rockIce)
 plot(closedConif)
 
-# note that open conifer is implicitly being defined as the intercept
+# no map of openconifer - note that open conifer is implicitly being defined as the intercept
 ```
 
 ## 0.6 Creating a Raster Stack 
@@ -129,6 +147,7 @@ Note, the next two sets of commands give a way to export the processed rasters, 
 names = c("deer_w", "moose_w", "elk_w", "sheep_w", "goat_w", "wolf_w","elevation2", "disthumanaccess2", "disthhu2", "landcover2", "alpine", "burn", "closedConif", "modConif", "herb", "mixed", "rockIce", "water", "decid")
 
 writeRaster(all_rasters,"Output/lab6Stack.tif",names = 'names', overwrite = TRUE)
+# these are now multi banded tifs where each band is a layer and then you name each layer with a band vector 
 ```
 
 # Multiple Logistic Regression & Collinearity
@@ -140,14 +159,20 @@ We will first evaluate collinearity between Distance to High Human Use and Eleva
 ## top Biotic model was model 41
 top.biotic <- glm(used ~ DistFromHumanAccess2+deer_w2 + goat_w2, family=binomial(logit), data=wolfkde3)
 summary(top.biotic)
+# reminder: null deviance is a model with no fit
 #double check the VIF for each final model, just to be sure
+## VIF is the variance information score - a measure of the variance between this model and the model that is a null model 
+## Shows how much the variance  is blowing up bc of colinearity
+## if they're all one they're fine, anything close to 5 is a problem
 vif(top.biotic)
 ```
 Environmental Model - top model is model 11
 ```{r}
 top.env <- glm(used ~ Elevation2 + DistFromHighHumanAccess2 + openConif+modConif+closedConif+mixed+herb+shrub+water+burn, family=binomial(logit), data=wolfkde3)
 summary(top.env)
+## Note that the deviance of this model is smaller than the biotic model 
 vif(top.env)
+## For this one, we see the closedConif and openConif are large, this is bc they are colinear with elevation
 ```
 
 Note I acknowledge some of the problems of inclduing elevation and distance from high human access in the model both because of the high correlation between the two, r = 0.52, but also the potentially important confounding.  I also note the high VIF for modConif. However, one could 'use' the upper limits of guidelines of including correlated variables, r = 0.6 - 0.7, and, the VIF < 10 as an argument to include these 2 variables. I personally wouldnt find it that convincing, but these are published guidelines, so we will go with it for now.  Personally, I would want to compare the fit (using AIC), coefficients, and VIF's of a top environmental with and without disthha in it . OR test it in cross-validation. But, lets proceed. This is a nice, complex enough environment model. 
@@ -175,13 +200,14 @@ plot(top.env)
 This cylces through residual plots which look decidedly different from 'normal' residual plots. Why do they look so weird??? The response is binomial, not gaussian. Thus, honeslty, residual plots are really useless at evaluating model fit. We will return to evaluating goodness of fit in lab 6. 
 
 Next, we will save the predictions from the top model using the fitted() function and examine the predictions ourselves directly.  We will then go on to calculate the following 
-1) residuals
-2) studentized residuals
+1) standard residuals - difference between model predications (probability) and observations (0 and 1)
+2) studentized residuals - studentized normalizes the residuals - takes the raw residuals and divides them by the standard deviation, converts it to the scale of standard deviation so if anything is outside of 2 we know its outside of the range that we would observe by chance alone 
 3) leverage statistics include the hat-value and Cooks distance .
 
 ```{r}
 ##### Saving predictions manually, an example with the environment model
 wolfkde3$fitted.top.env <- fitted(top.env)
+## fits probability of each point in the data frame for each point to be a wolf used point
 #### this is the predicted probability from the model
 
 wolfkde3$residuals.top.env <- residuals(top.env)
@@ -202,10 +228,19 @@ wolfkde3$obsNumber <- 1:nrow(wolfkde3) ## just added a row number for plotting
 Making manual residual verus predicted plots
 ```{r}
 ggplot(wolfkde3, aes(fitted.top.env, residuals.top.env)) + geom_point() + geom_text(aes(label = obsNumber, colour = used))
-## Manual residual plot
+## Manual residual plot - not very useful 
+# in practice you don't look at residual plots with binomial distribution
 
+# for binomials, you look at leverage
+# Leverage plot - residuals vs cooks distance 
 ggplot(wolfkde3, aes(wolfkde3$residuals.top.env, wolfkde3$cooks.distance.top.env)) + geom_point() + geom_text(aes(label = obsNumber, colour = used))
 ## shows us some points at high cooks values that might be having a big influence
+# Let's look at points that are outliers 
+wolfkde3[16,]
+# This point was at high elevation far from human access - it is a real wolf point even though our models says it's not supposed to be 
+# this is only an influential point bc the data frame that it's based off of is from a wolf pack in low elevation
+
+# This is what you use to go through and screen out errors in data entry 
 
 ggplot(wolfkde3, aes(wolfkde3$cooks.distance.top.env, wolfkde3$hatvalues.top.env)) + geom_point() + geom_text(aes(label = obsNumber, colour = used))
 ```
@@ -225,8 +260,11 @@ hist(wolfkde3$fitted.top.env, scale="frequency", breaks="Sturges", col="darkgray
 ```
 This last histogram plot is VERY important - it is the predicted probability of a location being a wolf used location given your top model. But how would we divide this into wolf habitat and wolf available? 
 
+
+Optimal cut point is determined by ratio to used available points (how many available points you generate) 
+
 ```{r}
-ggplot(wolfkde3, aes(x=wolfkde3$fitted.top.env, fill=usedFactor)) + geom_histogram(binwidth=0.05, position="identity", alpha=0.7) + xlab("Predicted Probability of Wolf Use") + theme(axis.title.x=element_text(size=16)) #+ facet_grid(pack ~ ., scales="free")
+ggplot(wolfkde3, aes(x=wolfkde3$fitted.top.env, fill=usedFactor)) + geom_histogram(binwidth=0.05, position="identity", alpha=0.7) + xlab("Predicted Probability of Wolf Use") + theme(axis.title.x=element_text(size=16)) + facet_grid(pack ~ ., scales="free")
 ```
 
 This plot shows that somewhere around 0.25 - 0.40 eyeballing it it looks like we could 'cut' used and available points? 
@@ -283,6 +321,7 @@ This plot is VERY important - it is the predicted probability of a location bein
 
 ```{r}
 ggplot(wolfkde3, aes(x=wolfkde3$fitted.top.biotic, fill=usedFactor)) + geom_histogram(binwidth=0.05, position="identity", alpha=0.7) + xlab("Predicted Probability of Wolf Use") + theme(axis.title.x=element_text(size=16)) #+ facet_grid(pack ~ ., scales="free")
+# Since this model wasn't as good, we expect a higher confusion area overlap
 
 #### This plot shows that somewhere around 0.25 - 0.40 eyeballing it it looks like we could 'cut' used and available points? 
 
@@ -298,7 +337,7 @@ So, similar but slightly starker differences between the predictions evaluated a
 ggplot(wolfkde3, aes(x=fitted.top.biotic, y=fitted.top.env)) + geom_point() + stat_smooth(method="lm")
 ```
 
-This shows a strong positive correlation between predicted probabilities of wolf use between the two models. Naturally this leads us to think of things like averaging predictions across models, a point we will return to much later in ths semester when we consider ensemble modeling. 
+This shows a strong positive correlation between predicted probabilities of wolf use between the two models. This is good! We also see that there are gaps where there should be, so one model isn't predicting high quality habitat when one predicts low quality. There is also a lot of noise in this - the spread is pretty far. Naturally this leads us to think of things like averaging predictions across models, a point we will return to much later in ths semester when we consider ensemble modeling. 
 
 What about the comparison of predictions from these two models when split by wolf packs?
 ```{r}
@@ -311,8 +350,13 @@ But what if we do not force a linear model through the predictions?
 
 ```{r}
 ggplot(wolfkde3, aes(x=fitted.top.biotic, y=fitted.top.env, fill = pack)) + geom_point() + stat_smooth()
+
+#This shows us that one model, above somme threshold, doesn't perform as well as another model 
+# the line on the model shows us that environmental model can't predict high quality biotic 
 ```
 This shows there is some evidence that the top environmental model (Y axis) is not successfully predicting the 'best' wolf habitat especially in the bow valley wolf pack compared to the top biotic model (X axis).
+
+
 
 
 # Classification Tables
@@ -344,6 +388,7 @@ First we will arbitrarily define the cutpoint between 1 and 0's using p = 0.5, w
 ```{r}
 # First we will arbitrarily define the cutpoint between 1 and 0's using p = 0.5
 ppused = wolfkde3$fitted.top.biotic>0.5
+# our first manual confusion table 
 table(ppused,wolfkde3$used)
 ```
 What this shows is on the top, the data - 0 = available, and 1 = used.  On the ROWS, we see points classified as 0's (FALSE) versus those classified as TRUE (1). Correctly classified 0's are 1655, and correctly classifed 1's are 167. But what are the cross diagonals?
@@ -420,7 +465,8 @@ xtab1<-table(wolfkde3$pr.top.biotic.used, wolfkde3$used)
 xtab1
 
 #?confusionMatrix
-confusionMatrix(xtab1) ## Note this is incorrectly specifying what the 1's are. 
+confusionMatrix(xtab1) ## Note this is incorrectly specifying what the 1's are.
+# this will give you all of the outputs
 
 confusionMatrix(xtab1, positive = "1") ## Thanks to spring 2019 student Forest HAyes for finding this mistake :)
 ```
@@ -470,15 +516,15 @@ Remember that sensitivity is the True Positive Rate, or, the classification succ
 pp = predict(top.biotic,type="response")
 pred = prediction(pp, wolfkde3$used)
 
-perf3 <- performance(pred, "sens", x.measure = "cutoff")
-plot(perf3)
+perf3 <- performance(pred, "sens", x.measure = "cutoff") # takes your ROCR pred object and calculates sensitivity with some measure of cutoff
+plot(perf3, xlab="Cutoff",ylab="Sensitivity")
 ```
 Look at what happens to our Sensitivity as we change the cutoff value. Remember that sensitivity is the True Positive Rate, or, the classification success of 1's when they are truly 1. Looking at the graph, we see that we classify everything as a wolf used location when the cutoff is really low. 
 
 Next, lets examine the relationship between the cutoff value and Specificity, or, the True Negative Rate - the rate we correctly classify 0's.  
 ```{r}
 perf4 <- performance(pred, "spec", x.measure = "cutoff")
-plot(perf4)
+plot(perf4,xlab="Cutoff/cut point",ylab= "Specificity")
 ```
 Similarly, if we use a really low threshold cutoff value between 0's and 1's, we see that we have the lowest Specificity - because basically we are calling everything a 1, and misclassifiying the true 0's. As the cutoff increases, we see that there is a sharp increase in our Specificity, approaching 100% of all 0's correctly classified by a cutoff of about 0.5. 
 
@@ -495,7 +541,7 @@ index <- which.max(sum)
 cutoff <- perfClass@alpha.values[[1]][[index]]
 cutoff
 ```
-Thus the cutpoint that maximizes the overall classification succes is 0.236. Note that this is VERY different from our naive starting value of 0.5. 
+Thus the cutpoint for our data set that maximizes the overall classification success is 0.236. Note that this is VERY different from our naive starting value of 0.5. 
 
 Where does this value come from?
 ```{r}
@@ -536,6 +582,7 @@ Next, we will proceed to calculate the area under the curve, or, the AUC. Calcul
 BMauc <- performance(pred, measure="auc") 
 str(BMauc)
 auc <- as.numeric(BMauc@y.values)
+# calculate the area under the curve 
 auc
 ```
 This is the sum of the area under the predicted performance curve we just plotted, showing that about ~ 86% of the time, we are correctly classifying the 1's.  But this does not capture the 0's.  For this, we need to look at the entire ROC plot. 
@@ -553,7 +600,7 @@ This plot shows us the ROC curve with the AUC reported, and the optimal cutpoint
 Another cost measure that is popular is overall accuracy. This measure optimizes the correct results, but may be skewed if there are many more negatives than positives, or vice versa. Let's get the overall accuracy for the simple predictions and plot it:
 ```{r}
 acc.perf = performance(pred, measure = "acc")
-plot(acc.perf)
+plot(acc.perf, main = "Overall Accuracy")
 ```
 But again, we know that overall accuracy is masking changes in the different rates of classification mistakes from our earlier work looking at how classification success changes across a range of cutoff values. 
 
@@ -622,18 +669,28 @@ First, we will run a function from Source, that is, without loading it directly 
 Here, we will 'source' an R function written by for the Boyce et al. (2002) paper, evaluating Rsf models I note above.  See the Rcode folder and the vignette folder for a PDF of the function written in standard R format.  
 ```{r}
 source("Rcode/kxv.R", verbose = FALSE)
+# this code splits your data into 5 partitions and validates the data witholding eac piece 
 ```
 Next, we will fit a 5-fold k=5 cross validation of the top.env model
 ```{r, warning = FALSE}
+# this is a non-parametric 
 # Kfolds with a 'fuzz' factor
 kxvPrintFlag=FALSE
 kxvPlotFlag=TRUE
+# this is for breaking ties - add a 1% difference in the case of a tie
 kxvFuzzFactor = 0.01
+# take the formula from the top model 
+# specify the data
+# is the folds of validation - divide your dataset into 5 subsets and fit model to 4 and then predict to the 5th (simple random sample) 
+# nbin is the number of categories we want to evaluate our predictions within - think like quartiles 
 kfolds = kxvglm(top.env$formula, data=wolfkde3, k=5, nbin=10) ## note we get a lot of ties here and some error messages, this is because of all the categories. Read more about this in the clumpy data.pdf in the Vignette folder.  
 kfolds
+# these graphs show you the frequency of ones by each habitat quality bins - both by each subset of the data and a mean with standard error graph
 ```
 
 First, we got some error messages about tie values.  Lets overlook that for now, but refer to Boyce et al or the kvx.pdf vignette for more detail. 
+
+With the output of these, you want on your graph to see an increasing monotomic relationship between habitat quality and frequency of use 
 
 
 These values tell you the Spearman rank correlation between every subset of the data 1 - 5 and the predicted correlation between the # of observations in ranked categories of habitat from 1, 10. 
@@ -674,9 +731,10 @@ top.env.1= glm(used ~ Elevation2 + DistFromHighHumanAccess2 + openConif+modConif
 
 # 3. Make predictions for points not used in this random subset (2:5) to fit the model.
 pred.prob = predict(top.env.1,newdata=wolfkde3[wolfkde3$rand.vec!=1,],type="response") ## note that != means everything but subset 1. 
+# type = "response" means that you're looking for the probability
 
 # 4. Make quantiles for the predictions - this calculates the 'bin's of the categories of habitat availability
-q.pp = quantile(pred.prob,probs=seq(0,1,.1))
+q.pp = quantile(pred.prob,probs=seq(0,1,.1)) # use units .1 to get deciles 
 
 # 5. Then for each of 10 bins, put each row of data into a bin
 bin = rep(NA,length(pred.prob))
@@ -696,8 +754,9 @@ This basically shows the data in each bin for used and available locations. If t
 
 ```{r}
 cor.test(c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10), c(0,2,0,8,6,15,24,50,99,110), method="spearman") 
+# correlate the x vector against our counts of the observed frequencies of 1s
 ```
-This suggests that in this random fold of the data, the model predicted habitat use well
+The result is .966, This suggests that in this random fold of the data, the model predicted habitat use well
 
 Finally, we can look at a cheesy graph of this 1 fold:
 ```{r}
@@ -707,6 +766,9 @@ ggplot(rand.vec.1.table, aes(as.numeric(bin), Freq, col = used1)) + geom_point(s
 This shows the observed frequency of 1's in blue and observed frequency of 0's (red) plotted against the predicted ranked equal decile ranked 'bins' of increasing habitat quality from 1 - 10, the similar K-folds graphs (for 1 fold, rand.vec ==1) for the top environmental model. 
 
 Excercise: Conduct k-folds cross validation ont the top-biotic models. 
+
+
+## Last step of model validation: spatial prediction 
 
 # Mapping Spatial Predictions of 'Top' Model 
 
@@ -720,31 +782,42 @@ par(mfrow = c(1,1)) # reset graphical parameters
 ggplot(wolfkde3, aes(EASTING, NORTHING, col = fitted.top.biotic)) + geom_point(size=5) + coord_equal() +  scale_colour_gradient(low = 'yellow', high = 'red')
 ggplot(wolfkde3, aes(EASTING, NORTHING, col = fitted.top.env)) + geom_point(size=5) + coord_equal() +  scale_colour_gradient(low = 'yellow', high = 'red')
 ```
- What did we just do? What is this a map of? The predicted probabilities in geographic space for our top biotic and top environmental models within the home ranges (using the actual XY's of the datset, so including 0's and 1's) within the 2 territories mapped by kernels. Note we are not technically extrapolating here. 
+ What did we just do? What is this a map of? The predicted probabilities in geographic space for our top biotic and top environmental models within the home ranges (using the actual XY's of the datset, so including 0's and 1's) within the 2 territories mapped by kernels. Note we are not technically extrapolating here - these are just the used and unused locations. 
 
 ## Raster Predictions 
 
 Next we will plot the spatial predictions using our raster stack for the top Biotic Model, passed through the logistic regression equation y = exp(X) / (1 + exp(X). Note that the final step takes a long time. 
 ```{r}
 par(mfrow = c(1,1))
+# extract the coefficients from the top model 
 top.biotic$coefficients
+# put them into a new object
 biotic.coefs <- top.biotic$coefficients[c(1:4)]
 ```
 
 Now we will calculate the probability of wolf use using the logistic regression equation y = exp(x) / (1 + exp(x)). Note that this step takes a long time.
+
+This is raster calculator - we're going to calculate predicted probability for every cell in our raster layer. 
 ```{r}
+# type in your raster math
 rast.top.biotic <- exp(biotic.coefs[1] + biotic.coefs[2]*disthumanaccess2 + biotic.coefs[3]*deer_w + biotic.coefs[4]*goat_w) / (1 +exp(biotic.coefs[1] + biotic.coefs[2]*disthumanaccess2 + biotic.coefs[3]*deer_w + biotic.coefs[4]*goat_w ))
 ```
 Note we need to use the names of the raster layers we brought in up above. Note that they are not the same names as stored in the Raster stack.
+
+## Make some maps 
 
 Lets bring in the wolfyht shapefile, and overlay the wolf home ranges and telemetry points to overlap to also aid our VISUAL model evaluation. 
 ```{r}
 wolfyht<-st_read("Data/wolfyht.shp")
 # plot predicted raster within extent of kernels raster
-plot(rast.top.biotic, col=colorRampPalette(c("yellow", "orange", "red"))(255), ext=kernels)
+plot(rast.top.biotic, col=colorRampPalette(c("yellow", "orange", "red"))(255), ext=kernels) # use the raster mask
 plot(kernelHR, add=TRUE, col = NA)
 plot(wolfyht, col='blue', pch = 16, add=TRUE)
 ```
+The areas where no telemetry data was collected are areas being extrapolated to.
+
+Interpolation and extrapolation difference:
+
 We note a number of issues with this plot. First, there are no predictions outside of Banff National Park, the extent of the underlying Deer, elk, moose models.  This is a common problem in spatial modeling, mismatched extents limit spatial predictions. 
 
 Second, we note we are now firmly in the realm of extrapolation, that is, making predictions beyond the range of data that went into the model. In this case, this is predicting the probability of wolf use OUTSIDE of the 95% KDE home ranges in black.  This is OK, but we will see this can lead to problems later. 
